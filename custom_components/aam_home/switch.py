@@ -9,7 +9,7 @@ from homeassistant.components.switch import SwitchEntity
 
 from .ddiot.iot_device import DdIotDevice
 from .ddiot.iot_device import DdIotPropertyEntity
-from .ddiot.const import DOMAIN
+from .const import DOMAIN
 
 
 async def async_setup_entry(

@@ -8,8 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.components import persistent_notification
 from homeassistant.helpers import device_registry, entity_registry
 
-from .ddiot.const import DOMAIN, SUPPORTED_PLATFORMS
-from .ddiot.iot_client import DdIotClient, get_miot_instance_async
+from .const import DOMAIN, SUPPORTED_PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
 

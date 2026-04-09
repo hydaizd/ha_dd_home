@@ -8,6 +8,6 @@
   "codeowners": [
     "@Dd"
   ],
-  "requirements": [],
+  "requirements": ["websocket-client==1.5.1"],
   "version": "v1.0.0"
 }
