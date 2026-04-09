@@ -112,13 +112,13 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle user flow."""
         if user_input:
-            if user_input["auto"]:
+            if user_input["host"]:
                 return await self.async_step_device()
             return await self.async_step_configure()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({vol.Required("auto", default=True): bool}),
+            data_schema=vol.Schema({vol.Required("host", default=""): str}),
         )
 
     async def async_step_device(
