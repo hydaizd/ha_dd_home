@@ -1,0 +1,13 @@
+{
+  "domain": "dd_home",
+  "name": "Dd Home",
+  "config_flow": true,
+  "documentation": "https://github.com/hydaizd/ha_dd_home",
+  "issue_tracker": "https://github.com/hydaizd/ha_dd_home/issues",
+  "dependencies": [],
+  "codeowners": [
+    "@Dd"
+  ],
+  "requirements": [],
+  "version": "v1.0.0"
+}
