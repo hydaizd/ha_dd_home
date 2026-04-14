@@ -170,10 +170,8 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
         description_placeholders: dict[str, str] = {}
         if user_input:
             self.onvif_config = user_input
-            errors, description_placeholders = await self.async_setup_profiles()
-            if not errors:
-                title = f"{self.onvif_config[CONF_DEVICE_NAME]} - {self.device_id}"
-                return self.async_create_entry(title=title, data=self.onvif_config)
+            title = f"{self.onvif_config[CONF_DEVICE_NAME]} - {self.device_id}"
+            return self.async_create_entry(title=title, data=self.onvif_config)
 
         def conf(name, default=None):
             return self.onvif_config.get(name, default)
