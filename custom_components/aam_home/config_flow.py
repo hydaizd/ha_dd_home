@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 
-import voluptuous as vol
-import logging
-import websocket
 import json
+import logging
 from pprint import pformat
-from urllib.parse import urlparse
 from typing import Any, List, Dict
 
-from homeassistant.core import HomeAssistant, callback
+import voluptuous as vol
+import websocket
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -17,15 +15,17 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import (
     CONF_HOST,
-    CONF_NAME,
     CONF_PASSWORD,
     CONF_PORT,
     CONF_USERNAME,
 )
+from homeassistant.core import HomeAssistant, callback
 
 from .const import (
     CONF_DEVICE_ID,
-    CONF_HARDWARE,
+    CONF_DEVICE_NAME,
+    CONF_DEVICE_TYPE,
+    CONF_DEVICE_SKU,
     DOMAIN,
     DEFAULT_PORT,
 )
@@ -40,7 +40,7 @@ def wsdiscovery() -> List[Dict[str, Any]]:
     devices = []
     try:
         # 连接到自定义websocket接口
-        ws_url = "ws://localhost:8888/devices"
+        ws_url = "ws://10.0.3.74:8888/devices"
         ws = websocket.create_connection(ws_url)
 
         # 发送请求获取设备列表
@@ -56,10 +56,9 @@ def wsdiscovery() -> List[Dict[str, Any]]:
             for device_data in data.get("devices", []):
                 device = {
                     CONF_DEVICE_ID: device_data.get("device_id"),
-                    CONF_NAME: device_data.get("name"),
-                    CONF_HOST: device_data.get("host"),
-                    CONF_PORT: device_data.get("port", 80),
-                    CONF_HARDWARE: device_data.get("hardware"),
+                    CONF_DEVICE_NAME: device_data.get("device_name"),
+                    CONF_DEVICE_TYPE: device_data.get("device_type"),
+                    CONF_DEVICE_SKU: device_data.get("device_sku"),
                 }
                 devices.append(device)
 
@@ -95,9 +94,7 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(
-        config_entry: ConfigEntry,
-    ) -> DdOptionsFlowHandler:
+    def async_get_options_flow(config_entry: ConfigEntry) -> DdOptionsFlowHandler:
         """Get the options flow for this handler."""
         return DdOptionsFlowHandler(config_entry)
 
@@ -107,9 +104,7 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
         self.devices: list[dict[str, Any]] = []
         self.onvif_config: dict[str, Any] = {}
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle user flow."""
         if user_input:
             if user_input["host"]:
@@ -121,25 +116,21 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({vol.Required("host", default=""): str}),
         )
 
-    async def async_step_device(
-        self, user_input: dict[str, str] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_device(self, user_input: dict[str, str] | None = None) -> ConfigFlowResult:
         """Handle WS-Discovery.
 
         Let user choose between discovered devices and manual configuration.
         If no device is found allow user to manually input configuration.
         """
         if user_input:
-            if user_input[CONF_HOST] == CONF_MANUAL_INPUT:
-                return await self.async_step_configure()
-
             for device in self.devices:
-                if device[CONF_HOST] == user_input[CONF_HOST]:
+                if device[CONF_DEVICE_ID] == user_input[CONF_DEVICE_ID]:
                     self.device_id = device[CONF_DEVICE_ID]
                     self.onvif_config = {
-                        CONF_NAME: device[CONF_NAME],
-                        CONF_HOST: device[CONF_HOST],
-                        CONF_PORT: device[CONF_PORT],
+                        CONF_DEVICE_NAME: device[CONF_DEVICE_NAME],
+                        CONF_DEVICE_ID: device[CONF_DEVICE_ID],
+                        CONF_DEVICE_TYPE: device[CONF_DEVICE_TYPE],
+                        CONF_DEVICE_SKU: device[CONF_DEVICE_SKU],
                     }
                     return await self.async_step_configure()
 
@@ -157,22 +148,22 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
             LOGGER.debug("Discovered ONVIF devices %s", pformat(self.devices))
 
         if self.devices:
-            devices = {CONF_MANUAL_INPUT: CONF_MANUAL_INPUT}
+            devices = {}
             for device in self.devices:
-                description = f"{device[CONF_NAME]} ({device[CONF_HOST]})"
-                if hardware := device[CONF_HARDWARE]:
-                    description += f" [{hardware}]"
-                devices[device[CONF_HOST]] = description
+                description = f"{device[CONF_DEVICE_NAME]} ({device[CONF_DEVICE_SKU]})"
+                if dtype := device[CONF_DEVICE_TYPE]:
+                    description += f" [{dtype}]"
+                devices[device[CONF_DEVICE_ID]] = description
 
             return self.async_show_form(
                 step_id="device",
-                data_schema=vol.Schema({vol.Optional(CONF_HOST): vol.In(devices)}),
+                data_schema=vol.Schema({vol.Optional(CONF_DEVICE_ID): vol.In(devices)}),
             )
 
         return await self.async_step_configure()
 
     async def async_step_configure(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Device configuration."""
         errors: dict[str, str] = {}
@@ -181,7 +172,7 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
             self.onvif_config = user_input
             errors, description_placeholders = await self.async_setup_profiles()
             if not errors:
-                title = f"{self.onvif_config[CONF_NAME]} - {self.device_id}"
+                title = f"{self.onvif_config[CONF_DEVICE_NAME]} - {self.device_id}"
                 return self.async_create_entry(title=title, data=self.onvif_config)
 
         def conf(name, default=None):
@@ -195,11 +186,10 @@ class DdFlowHandler(ConfigFlow, domain=DOMAIN):
             step_id="configure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_NAME, default=conf(CONF_NAME)): str,
-                    vol.Required(CONF_HOST, default=conf(CONF_HOST)): str,
-                    vol.Required(CONF_PORT, default=conf(CONF_PORT, DEFAULT_PORT)): int,
-                    vol.Optional(CONF_USERNAME, default=conf(CONF_USERNAME, "")): str,
-                    vol.Optional(CONF_PASSWORD, default=conf(CONF_PASSWORD, "")): str,
+                    vol.Required(CONF_DEVICE_NAME, default=conf(CONF_DEVICE_NAME)): str,
+                    vol.Required(CONF_DEVICE_ID, default=conf(CONF_DEVICE_ID)): str,
+                    vol.Required(CONF_DEVICE_TYPE, default=conf(CONF_DEVICE_TYPE)): str,
+                    vol.Required(CONF_DEVICE_SKU, default=conf(CONF_DEVICE_SKU)): str,
                 }
             ),
             errors=errors,
