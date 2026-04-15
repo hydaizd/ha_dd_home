@@ -2,6 +2,7 @@
 
 DOMAIN: str = "dd_home"
 
+#　定义集成支持的平台
 SUPPORTED_PLATFORMS: list = [
     "switch",
 ]
@@ -15,3 +16,6 @@ CONF_DEVICE_SKU = "sku_id"
 
 CONF_HARDWARE = "hardware"
 DEFAULT_PORT = 80
+
+# Http api
+HTTP_API_TIMEOUT: int = 30
