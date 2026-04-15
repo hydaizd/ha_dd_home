@@ -19,12 +19,11 @@ class IotClient:
     _http: HttpClient
 
     def __init__(self, entry_id: str, entry_data: dict, ) -> None:
-        self._http_server = entry_data['http_server']
         self._http = None
 
     async def init_async(self) -> None:
         # Iot http client instance
-        self._http = HttpClient(access_token=self._user_config['auth_info']['access_token'])
+        self._http = HttpClient(access_token='')
 
     async def send_request_async(self, mid_bind_id: str, cmd: str, ep: int, value: Any) -> bool:
         # Local http control
