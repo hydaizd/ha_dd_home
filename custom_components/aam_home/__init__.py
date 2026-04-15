@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
 
-from utils.iot_client import IotClient, get_iot_instance_async
+from .utils.iot_client import IotClient, get_iot_instance_async
 from .const import DOMAIN, SUPPORTED_PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
