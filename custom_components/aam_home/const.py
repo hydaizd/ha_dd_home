@@ -25,3 +25,8 @@ DEFAULT_TIMEOUT = 10
 # 数据存储键
 DATA_API_CLIENT = "api_client"
 DATA_COORDINATOR = "coordinator"
+
+# 指定测试设备
+TEST_DEVICE_ID: list = [
+    "70B3D5058043552C"
+]

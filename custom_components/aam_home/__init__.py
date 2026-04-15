@@ -14,6 +14,7 @@ from .const import (
     CONF_USERNAME,
     CONF_PASSWORD,
     DATA_COORDINATOR,
+    DATA_API_CLIENT,
     DEFAULT_SCAN_INTERVAL,
     SUPPORTED_PLATFORMS
 )
@@ -58,7 +59,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     await coordinator.async_config_entry_first_refresh()
 
     # 存储数据
-    hass.data[DOMAIN][entry.entry_id] = {
+    hass.data[DOMAIN][config_entry.entry_id] = {
         DATA_API_CLIENT: api,
         DATA_COORDINATOR: coordinator
     }
