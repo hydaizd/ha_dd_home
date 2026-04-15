@@ -4,14 +4,10 @@
   "config_flow": true,
   "documentation": "https://github.com/hydaizd/ha_dd_home",
   "issue_tracker": "https://github.com/hydaizd/ha_dd_home/issues",
-  "dependencies": [
-    "http"
-  ],
+  "dependencies": [],
   "codeowners": [
     "@hydaizd"
   ],
-  "requirements": [
-    "aiohttp>=3.8.0"
-  ],
+  "requirements": [],
   "version": "v1.0.0"
 }
