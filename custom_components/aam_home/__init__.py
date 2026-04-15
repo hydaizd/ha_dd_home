@@ -1,76 +1,77 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from typing import Optional
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .utils.iot_client import IotClient, get_iot_instance_async
-from .const import DOMAIN, SUPPORTED_PLATFORMS
+from .const import (
+    DOMAIN,
+    CONF_HOST,
+    CONF_USERNAME,
+    CONF_PASSWORD,
+    DATA_COORDINATOR,
+    DEFAULT_SCAN_INTERVAL,
+    SUPPORTED_PLATFORMS
+)
+from .utils.local_api import LocalAPI
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup(hass: HomeAssistant, hass_config: dict) -> bool:
-    """集成初始化"""
-    # pylint: disable=unused-argument
-    hass.data.setdefault(DOMAIN, {})
-    # {[entry_id:str]: IoTClient}, iot client instance
-    hass.data[DOMAIN].setdefault('iot_clients', {})
-    # {[entry_id:str]: list[DdIotDevice]}
-    hass.data[DOMAIN].setdefault("devices", {})
-    # {[entry_id:str]: entities}
-    hass.data[DOMAIN].setdefault("entities", {})
-    for platform in SUPPORTED_PLATFORMS:
-        hass.data[DOMAIN]["entities"][platform] = []
-    return True
-
-
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """集成安装"""
+    """设置配置条目."""
+    hass.data.setdefault(DOMAIN, {})
 
-    def ha_persistent_notify(notify_id: str, title: Optional[str] = None, message: Optional[str] = None) -> None:
-        """Send messages in Notifications dialog box."""
-        if title:
-            persistent_notification.async_create(hass=hass, message=message or '', title=title,
-                                                 notification_id=notify_id)
-        else:
-            persistent_notification.async_dismiss(hass=hass, notification_id=notify_id)
+    # 创建API客户端
+    session = hass.helpers.aiohttp_client.async_get_clientsession()
+    api = LocalAPI(
+        host=config_entry.data[CONF_HOST],
+        username=config_entry.data[CONF_USERNAME],
+        password=config_entry.data[CONF_PASSWORD],
+        session=session
+    )
 
-    entry_id = config_entry.entry_id
-    entry_data = dict(config_entry.data)
+    # 登录并获取初始设备列表
+    if not await api.async_login():
+        _LOGGER.error("无法登录到智能盒子")
+        return False
 
-    try:
-        await get_iot_instance_async(hass=hass, entry_id=entry_id, entry_data=entry_data,
-                                     persistent_notify=ha_persistent_notify)
+    # 创建数据更新协调器[4](@ref)
+    async def async_update_data():
+        """从API获取最新数据."""
+        devices = await api.async_get_devices()
+        return {"devices": devices}
 
-        # hass.data[DOMAIN]['devices'][config_entry.entry_id] = iot_devices
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        name="my_smart_box",
+        update_method=async_update_data,
+        update_interval=DEFAULT_SCAN_INTERVAL,
+    )
 
-        await hass.config_entries.async_forward_entry_setups(config_entry, SUPPORTED_PLATFORMS)
-    except Exception as err:
-        raise err
+    # 获取初始数据
+    await coordinator.async_config_entry_first_refresh()
+
+    # 存储数据
+    hass.data[DOMAIN][entry.entry_id] = {
+        DATA_API_CLIENT: api,
+        DATA_COORDINATOR: coordinator
+    }
+
+    # 设置平台
+    await hass.config_entries.async_forward_entry_setups(config_entry, SUPPORTED_PLATFORMS)
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """集成卸载"""
-    return True
+    """卸载配置条目."""
+    if unload_ok := await hass.config_entries.async_unload_platforms(config_entry, SUPPORTED_PLATFORMS):
+        hass.data[DOMAIN].pop(config_entry.entry_id)
 
-
-async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """集成移除"""
-    return True
-
-
-async def async_remove_config_entry_device(
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-        device_entry: device_registry.DeviceEntry,
-) -> bool:
-    """集成移除设备"""
-
-    return True
+    return unload_ok

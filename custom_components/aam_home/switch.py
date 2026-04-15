@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -8,10 +8,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, DATA_API_CLIENT, DATA_COORDINATOR
+from .utils.local_api import LocalAPI
 
 # 用于在 HA 前端显示的名称
 DEFAULT_NAME = "Aam Home Controlled Switch"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -19,75 +22,115 @@ async def async_setup_entry(
         config_entry: ConfigEntry,
         async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the switch platform."""
-    switch_instance = hass.data[DOMAIN][config_entry.entry_id]
-    # 添加实体
-    async_add_entities([AamSwitchEntity(switch_instance)])
+    """设置开关平台."""
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    api: LocalAPI = data[DATA_API_CLIENT]
+    coordinator = data[DATA_COORDINATOR]
+
+    # 从协调器获取设备数据
+    devices = coordinator.data.get("devices", [])
+
+    # 创建开关实体
+    entities = []
+    for device in devices:
+        device_type = device.get("type", "")
+        if device_type in ["switch", "outlet"]:  # 空开设备
+            entities.append(
+                AamSwitchEntity(
+                    coordinator,
+                    api,
+                    device,
+                    config_entry.entry_id
+                )
+            )
+
+    async_add_entities(entities)
 
 
 class AamSwitchEntity(CoordinatorEntity, SwitchEntity):
-    """Representation of an AAM Switch."""
+    """表示智能盒子开关实体."""
 
-    _is_on: bool  # 开关开启状态(True/False, 初始状态为 False, True为开启, False为关闭)
-    _cmd: str  # 开关控制艾美指令(固定 set_state)
-    _midBindId: str  # 开关设备指纹
-    _endpointId: int  # 开关设备端点ID
+    def __init__(
+            self,
+            coordinator,
+            api: LocalAPI,
+            device: dict[str, Any],
+            entry_id: str
+    ) -> None:
+        """初始化开关."""
+        super().__init__(coordinator)
+        self._api = api
+        self._device = device
+        self._entry_id = entry_id
 
-    # pylint: disable=unused-argument
+        # 设备属性
+        self._attr_name = device.get("name", f"开关 {device.get('endpointId')}")
+        self._attr_unique_id = f"{entry_id}_{device.get('midBindId')}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry_id)},
+            "name": f"智能盒子 {entry_id}",
+            "manufacturer": "智能盒子厂商",
+            "model": "智能控制盒"
+        }
 
-    _attr_name = DEFAULT_NAME
-    _attr_unique_id = f"{DOMAIN}_switch_{DOMAIN}"  # 确保 unique_id 唯一
-
-    def __init__(self, switch_instance):
-        """Initialize the switch."""
-        super().__init__(switch_instance.coordinator)  # 如果有协调器的话
-        self._switch = switch_instance
-        self._is_on = False
-        self._cmd = "set_state"
-
-    @property
-    def is_on(self) -> bool:
-        """On/Off state."""
-        return self._is_on is True
-
-    @property
-    def cmd(self) -> str:
-        """Return the command."""
-        return self._cmd
-
-    @property
-    def midBindId(self) -> str:
-        """Return the midBindId."""
-        return self._midBindId
+        # 从设备数据初始化状态
+        self._attr_is_on = device.get("state", 0) == 1
 
     @property
-    def endpointId(self) -> int:
-        """Return the endpointId."""
-        return self._endpointId
-
-    async def _send_request(self, value: bool) -> bool:
-        """Send a request to the switch."""
-        try:
-            await self.iot_client.fetch_post_async(
-                midBindId=self.midBindId,
-                cmd=self.cmd,
-                ep=self.endpointId,
-                value=value,
-            )
-        except Exception as e:
-            raise RuntimeError(f"{e}, {self._switch.entity_id}, {self._switch.name}") from e
-        self._is_on = value
-        self.async_write_ha_state()
-        return True
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """返回设备额外属性."""
+        return {
+            "endpoint_id": self._device.get("endpointId"),
+            "group_id": self._device.get("groupId"),
+            "mid_bind_id": self._device.get("midBindId"),
+            "device_type": self._device.get("type"),
+            "firmware_version": self._device.get("firmwareVersion", "unknown")
+        }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the switch on."""
-        await self._send_request(value=True)
+        """打开开关."""
+        success = await self._api.async_control_device(
+            endpoint_id=self._device.get("endpointId"),
+            group_id=self._device.get("groupId"),
+            mid_bind_id=self._device.get("midBindId"),
+            state=1
+        )
+
+        if success:
+            self._attr_is_on = True
+            self.async_write_ha_state()
+
+            # 触发协调器更新
+            await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("无法打开开关: %s", self._attr_name)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the switch off."""
-        await self._send_request(value=False)
+        """关闭开关."""
+        success = await self._api.async_control_device(
+            endpoint_id=self._device.get("endpointId"),
+            group_id=self._device.get("groupId"),
+            mid_bind_id=self._device.get("midBindId"),
+            state=0
+        )
 
-    async def async_toggle(self, **kwargs: Any) -> None:
-        """Toggle the switch."""
-        await self._send_request(value=not self.is_on)
+        if success:
+            self._attr_is_on = False
+            self.async_write_ha_state()
+
+            # 触发协调器更新
+            await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("无法关闭开关: %s", self._attr_name)
+
+    def _handle_coordinator_update(self) -> None:
+        """处理协调器更新."""
+        # 从最新数据中查找当前设备状态
+        devices = self.coordinator.data.get("devices", [])
+        for device in devices:
+            if device.get("midBindId") == self._device.get("midBindId"):
+                self._device = device
+                self._attr_is_on = device.get("state", 0) == 1
+                break
+
+        self.async_write_ha_state()

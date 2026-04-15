@@ -1,13 +1,17 @@
 {
-  "domain": "dd_home",
-  "name": "Dd Home",
+  "domain": "aam_home",
+  "name": "艾美智空间设备控制器",
   "config_flow": true,
   "documentation": "https://github.com/hydaizd/ha_dd_home",
   "issue_tracker": "https://github.com/hydaizd/ha_dd_home/issues",
-  "dependencies": [],
-  "codeowners": [
-    "@Dd"
+  "dependencies": [
+    "http"
   ],
-  "requirements": ["websocket-client==1.5.1"],
+  "codeowners": [
+    "@hydaizd"
+  ],
+  "requirements": [
+    "aiohttp>=3.8.0"
+  ],
   "version": "v1.0.0"
 }

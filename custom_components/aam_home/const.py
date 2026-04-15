@@ -1,21 +1,27 @@
 # -*- coding: utf-8 -*-
 
-DOMAIN: str = "dd_home"
+DOMAIN: str = "aam_home"
+NAME: str = "艾美智空间设备控制器"
 
-#　定义集成支持的平台
+# 　定义集成支持的平台
 SUPPORTED_PLATFORMS: list = [
     "switch",
 ]
 
-# Keys for values used in the config_entry data dictionary
-CONF_DEVICE_NAME = "name"
-CONF_DEVICE_ID = "mid_bind_id"
-CONF_DEVICE_TYPE = "product_type"
-CONF_DEVICE_SKU = "sku_id"
+# 配置键
+CONF_HOST = "host"
+CONF_USERNAME = "username"
+CONF_PASSWORD = "password"
 
+# API端点
+API_LOGIN = "/api/basic/user/login"
+API_DEVICES = "/api/basic/device/endpoint_page"
+API_CONTROL = "/api/basic/device/ctrl"
 
-CONF_HARDWARE = "hardware"
-DEFAULT_PORT = 80
+# 默认值
+DEFAULT_SCAN_INTERVAL = 30
+DEFAULT_TIMEOUT = 10
 
-# Http api
-HTTP_API_TIMEOUT: int = 30
+# 数据存储键
+DATA_API_CLIENT = "api_client"
+DATA_COORDINATOR = "coordinator"
